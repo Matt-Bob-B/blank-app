@@ -1,0 +1,55 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux-tests:
+    name: Linux — engine tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Use HTTPS for nested submodules
+        run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build libasound2-dev \
+            libfreetype-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev \
+            libxcomposite-dev libxext-dev libgl1-mesa-dev libcurl4-openssl-dev
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  windows-app:
+    name: Windows — app build
+    runs-on: windows-latest
+    steps:
+      - name: Use HTTPS for nested submodules
+        run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item build/Tessitura_artefacts/Release/Tessitura.exe dist/
+          Compress-Archive -Path dist/* -DestinationPath Tessitura-windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tessitura-windows-x64
+          path: Tessitura-windows-x64.zip
