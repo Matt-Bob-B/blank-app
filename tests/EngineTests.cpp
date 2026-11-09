@@ -259,6 +259,33 @@ TEST_CASE ("Project save and reload round-trips tracks, regions and notes")
     CHECK (notes[0]->getStartBeat().inBeats() == doctest::Approx (1.0));
 }
 
+TEST_CASE ("Save As moves audio from an untitled project into the new project folder")
+{
+    host().newProject();
+    auto& edit = host().getEdit();
+    auto* track = firstTrackOfKind (edit, TrackKind::audio);
+
+    // Simulate a take recorded while the project was untitled.
+    auto take = writeSineWav (host().getAudioFolder().getChildFile ("Untitled_Audio 1_Take_1.wav"), 0.5, 0.25f);
+    auto* clip = addAudioRegion (*track, take, te::TimePosition());
+    REQUIRE (clip != nullptr);
+
+    TempDir tmp;
+    auto file = tmp.dir.getChildFile ("Demo").getChildFile ("Demo.tessproj");
+    REQUIRE (host().saveProjectAs (file));
+
+    auto moved = clip->getSourceFileReference().getFile();
+    CHECK (moved.isAChildOf (file.getParentDirectory().getChildFile ("Audio")));
+    CHECK (moved.existsAsFile());
+
+    // Reload and confirm the region still points at the copied file.
+    host().newProject();
+    REQUIRE (host().openProject (file).isEmpty());
+    auto* reloaded = dynamic_cast<te::WaveAudioClip*> (firstTrackOfKind (host().getEdit(), TrackKind::audio)->getClips()[0]);
+    REQUIRE (reloaded != nullptr);
+    CHECK (reloaded->getSourceFileReference().getFile() == moved);
+}
+
 TEST_CASE ("Opening a non-project file fails cleanly")
 {
     TempDir tmp;
@@ -272,4 +299,41 @@ TEST_CASE ("Note names use Middle C = C3")
 {
     CHECK (noteName (60) == "C3");
     CHECK (noteName (69) == "A3");
+}
+
+// Not part of the normal run. Writes a small demo project for manual testing:
+//   TessituraTests --no-skip -tc="Generate demo project" -- <folder>
+TEST_CASE ("Generate demo project" * doctest::skip())
+{
+    auto folder = juce::File::getCurrentWorkingDirectory().getChildFile ("Demo");
+    host().newProject();
+    auto& edit = host().getEdit();
+    edit.tempoSequence.getTempo (0)->setBpm (104.0);
+
+    auto tracks = te::getAudioTracks (edit);
+    tracks[0]->setName ("Keys");
+    tracks[1]->setName ("Sine Pad");
+
+    auto* chords = addMidiRegion (*tracks[0], 0, 4);
+    chords->setName ("Chords");
+    const int progression[4][3] = { { 60, 64, 67 }, { 57, 60, 64 }, { 53, 57, 60 }, { 55, 59, 62 } };
+
+    for (int bar = 0; bar < 4; ++bar)
+        for (int n : progression[bar])
+            addNote (*chords, n, bar * 4.0, 3.5, 92);
+
+    auto* bassTrack = addInstrumentTrack (edit, "Bass");
+    auto* bass = addMidiRegion (*bassTrack, 0, 4);
+    bass->setName ("Bass line");
+    const int roots[4] = { 36, 33, 29, 31 };
+
+    for (int bar = 0; bar < 4; ++bar)
+        for (int beat = 0; beat < 4; ++beat)
+            addNote (*bass, roots[bar] + (beat == 3 ? 7 : 0), bar * 4.0 + beat, 0.75, beat == 0 ? 110 : 85);
+
+    auto audio = writeSineWav (host().getAudioFolder().getChildFile ("Pad.wav"), 4.0, 0.3f);
+    addAudioRegion (*tracks[1], audio, edit.tempoSequence.toTime (te::BeatPosition::fromBeats (8.0)));
+
+    REQUIRE (host().saveProjectAs (folder.getChildFile ("Demo.tessproj")));
+    MESSAGE ("Wrote " << folder.getChildFile ("Demo.tessproj").getFullPathName());
 }

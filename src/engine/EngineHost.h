@@ -7,17 +7,29 @@ namespace tess
 
 /** Owns the Tracktion Engine and the currently open project (an Edit).
 
-    The UI listens to this object (ChangeBroadcaster) and rebuilds itself
-    whenever a different Edit is loaded.
+    The UI registers a Listener: it must drop every reference to the old Edit in
+    editAboutToBeReplaced() (called synchronously, before the old Edit is deleted)
+    and rebuild in editReplaced().
 */
-class EngineHost  : public juce::ChangeBroadcaster
+class EngineHost
 {
 public:
+    struct Listener
+    {
+        virtual ~Listener() = default;
+        virtual void editAboutToBeReplaced() {}
+        virtual void editReplaced() {}
+        virtual void projectFileChanged() {}
+    };
+
+    void addListener (Listener* l)     { listeners.add (l); }
+    void removeListener (Listener* l)  { listeners.remove (l); }
+
     static constexpr const char* projectExtension = ".tessproj";
 
     /** @param uiBehaviour  optional UI hooks; pass nullptr for headless use. */
     explicit EngineHost (std::unique_ptr<te::UIBehaviour> uiBehaviour = nullptr);
-    ~EngineHost() override;
+    ~EngineHost();
 
     te::Engine& getEngine() noexcept    { return *engine; }
     te::Edit& getEdit() noexcept        { return *edit; }
@@ -46,6 +58,7 @@ private:
     void updateRecordingPaths();
     void installEdit (std::unique_ptr<te::Edit>, const juce::File&, bool isUntitled);
 
+    juce::ListenerList<Listener> listeners;
     std::unique_ptr<te::Engine> engine;
     std::unique_ptr<te::Edit> edit;
     juce::File projectFile;

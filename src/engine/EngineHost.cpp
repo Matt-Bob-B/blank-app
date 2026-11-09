@@ -94,6 +94,34 @@ bool EngineHost::saveProjectAs (const juce::File& file)
     if (! target.getParentDirectory().createDirectory())
         return false;
 
+    // Audio recorded or imported into the old project folder (e.g. a temporary
+    // untitled project) moves with the project so it survives the temp folder.
+    auto oldAudio = getAudioFolder();
+    auto newAudio = target.getParentDirectory().getChildFile ("Audio");
+
+    if (oldAudio != newAudio && newAudio.createDirectory())
+    {
+        for (auto* track : te::getAudioTracks (*edit))
+        {
+            for (auto* clip : track->getClips())
+            {
+                if (auto* wave = dynamic_cast<te::WaveAudioClip*> (clip))
+                {
+                    auto& ref = wave->getSourceFileReference();
+                    auto src = ref.getFile();
+
+                    if (src.existsAsFile() && src.isAChildOf (oldAudio))
+                    {
+                        auto dst = newAudio.getNonexistentChildFile (src.getFileNameWithoutExtension(), src.getFileExtension(), false);
+
+                        if (src.copyFileTo (dst))
+                            ref.setToDirectFileReference (dst, false);
+                    }
+                }
+            }
+        }
+    }
+
     if (! te::EditFileOperations (*edit).saveAs (target, true))
         return false;
 
@@ -101,7 +129,7 @@ bool EngineHost::saveProjectAs (const juce::File& file)
     untitled = false;
     edit->editFileRetriever = [target] { return target; };
     updateRecordingPaths();
-    sendChangeMessage();
+    listeners.call ([] (Listener& l) { l.projectFileChanged(); });
     return true;
 }
 
@@ -118,7 +146,11 @@ juce::File EngineHost::getAudioFolder() const
 void EngineHost::installEdit (std::unique_ptr<te::Edit> newEdit, const juce::File& file, bool isUntitled)
 {
     if (edit != nullptr)
+    {
         edit->getTransport().stop (false, true);
+        listeners.call ([] (Listener& l) { l.editAboutToBeReplaced(); });
+        edit.reset();
+    }
 
     edit = std::move (newEdit);
     projectFile = file;
@@ -128,7 +160,7 @@ void EngineHost::installEdit (std::unique_ptr<te::Edit> newEdit, const juce::Fil
     updateRecordingPaths();
 
     edit->getTransport().ensureContextAllocated();
-    sendChangeMessage();
+    listeners.call ([] (Listener& l) { l.editReplaced(); });
 }
 
 void EngineHost::updateRecordingPaths()
