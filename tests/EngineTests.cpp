@@ -10,10 +10,21 @@ using namespace tess;
 namespace
 {
     // Tracktion expects a single Engine per process, so the tests share one host.
+    // It must be destroyed before JUCE shuts down (see destroyTestHost), not at static exit.
+    std::unique_ptr<EngineHost>& hostStorage()
+    {
+        static std::unique_ptr<EngineHost> h;
+        return h;
+    }
+
     EngineHost& host()
     {
-        static EngineHost h;
-        return h;
+        auto& h = hostStorage();
+
+        if (h == nullptr)
+            h = std::make_unique<EngineHost>();
+
+        return *h;
     }
 
     struct TempDir
@@ -77,6 +88,9 @@ namespace
         return nullptr;
     }
 }
+
+void destroyTestHost()  { hostStorage().reset(); }
+
 
 TEST_CASE ("New project has default session layout")
 {

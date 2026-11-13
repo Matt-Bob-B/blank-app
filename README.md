@@ -39,15 +39,16 @@ Built on [JUCE](https://juce.com) and [Tracktion Engine](https://github.com/Trac
 
 ## Building on Windows
 
-Requirements: Visual Studio 2022 (Desktop development with C++), CMake 3.22+, Git.
+Requirements: Visual Studio 2022 or newer (Desktop development with C++), Git.
 
 ```powershell
 git config --global url."https://github.com/".insteadOf "git@github.com:"   # the engine's JUCE submodule uses an SSH URL
-git clone --recurse-submodules https://github.com/Matt-Bob-B/blank-app.git tessitura
-cd tessitura
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release --parallel
-build\Tessitura_artefacts\Release\Tessitura.exe
+git clone --recurse-submodules -b claude/funny-carson-i8auti https://github.com/Matt-Bob-B/blank-app.git C:\Dev\tessitura
+cd C:\Dev\tessitura
+cmake --preset windows-release
+cmake --build --preset windows-release
+ctest --preset windows-release
+build\windows\Tessitura_artefacts\Release\Tessitura.exe
 ```
 
 Every push also builds a Windows zip in GitHub Actions (**Actions → Build → Tessitura-windows-x64** artifact).
@@ -57,7 +58,7 @@ Every push also builds a Windows zip in GitHub Actions (**Actions → Build → 
 WASAPI works out of the box. For ASIO, download Steinberg's ASIO SDK and configure with:
 
 ```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DTESSITURA_ENABLE_ASIO=ON -DASIO_SDK_DIR=C:/SDKs/asiosdk
+cmake --preset windows-release -DTESSITURA_ENABLE_ASIO=ON -DASIO_SDK_DIR=C:/SDKs/asiosdk
 ```
 
 Check the ASIO SDK licence terms before distributing a build that includes it.
@@ -67,9 +68,9 @@ Check the ASIO SDK licence terms before distributing a build that includes it.
 ```bash
 sudo apt-get install ninja-build libasound2-dev libfreetype-dev libx11-dev libxrandr-dev \
   libxinerama-dev libxcursor-dev libxcomposite-dev libxext-dev libgl1-mesa-dev libcurl4-openssl-dev
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake --preset linux-release
+cmake --build --preset linux-release
+ctest --preset linux-release
 ```
 
 The test suite renders audio offline and checks the results (MIDI through the synth, audio regions at the
@@ -92,6 +93,12 @@ cd /some/folder && /path/to/build/TessituraTests --no-skip -tc="Generate demo pr
 7. Save, quit, reopen: everything (including plug-in settings) comes back.
 8. **File → Export Mixdown**: play the WAV in another player.
 9. Check the UI at 100% and 150% Windows display scaling.
+
+## Working with Claude Code on your PC
+
+`CLAUDE.md` briefs a local Claude Code session on the architecture, build commands and rules.
+Start it from the repo folder (`claude`, or `claude remote-control` to follow it from the Claude app).
+Record hardware results in `docs/windows-test-log.md`.
 
 ## Project layout
 
